@@ -20,23 +20,23 @@ This document tracks the development progress of Claude Notify, a multi-platform
 - [x] Create stop hook script
 - [x] Support custom icons
 - [x] Support notification urgency levels
-- [ ] Add notification categories/hints
-- [ ] Support notification actions (buttons)
+- [x] Add notification categories/hints
+- [x] Support notification actions (buttons)
 
 ### 1.3 Configuration System
 - [x] Create JSON configuration schema
 - [x] Support environment variable overrides
 - [x] Create example configuration file
-- [ ] Add configuration validation
-- [ ] Support per-project configuration overrides
+- [x] Add configuration validation
+- [x] Support per-project configuration overrides
 
 ### 1.4 Installation System
 - [x] Create install.sh for Linux
 - [x] Create uninstall.sh
 - [x] Auto-detect existing Claude Code installation
 - [x] Backup existing hooks before modification
-- [ ] Add --dry-run option to installer
-- [ ] Add version detection and upgrade path
+- [x] Add --dry-run option to installer
+- [x] Add version detection and upgrade path
 
 ---
 
