@@ -60,17 +60,17 @@ This document tracks the development progress of Claude Notify, a multi-platform
 ## Phase 3: Windows Support
 
 ### 3.1 Windows Toast Notifications
-- [ ] Create PowerShell notification script
-- [ ] Support Windows Toast notification format
-- [ ] Add BurntToast module support for rich notifications
-- [ ] Support notification sounds
-- [ ] Handle Windows notification permissions
+- [x] Create PowerShell notification script
+- [x] Support Windows Toast notification format
+- [x] Add BurntToast module support for rich notifications
+- [x] Support notification sounds
+- [x] Handle Windows notification permissions
 
 ### 3.2 Windows Installation
-- [ ] Create install.ps1 for Windows
-- [ ] Create install.bat wrapper
-- [ ] Handle Windows path conventions
-- [ ] Support Windows icon formats (.ico)
+- [x] Create install.ps1 for Windows
+- [x] Create install.bat wrapper
+- [x] Handle Windows path conventions
+- [x] Support Windows icon formats (.ico)
 
 ---
 

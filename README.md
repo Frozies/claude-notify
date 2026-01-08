@@ -15,7 +15,7 @@ Multi-platform notification system for [Claude Code](https://docs.anthropic.com/
 |----------|---------|--------|
 | Linux | `notify-send` (libnotify) | Stable |
 | macOS | `osascript` / `terminal-notifier` | Planned |
-| Windows | PowerShell Toast / BurntToast | Planned |
+| Windows | PowerShell Toast / BurntToast | Stable |
 | Mobile | ntfy.sh | Planned |
 | Mobile | Pushover | Planned |
 
@@ -30,6 +30,20 @@ cd claude-notify
 
 # Run the installer
 ./install.sh
+```
+
+### Windows
+
+```powershell
+# Clone the repository
+git clone https://github.com/yourusername/claude-notify.git
+cd claude-notify
+
+# Run the installer (PowerShell)
+.\install.ps1
+
+# Or use the batch file (double-click or run from cmd)
+.\install.bat
 ```
 
 That's it! You'll now receive desktop notifications when Claude Code needs input.
@@ -63,14 +77,14 @@ sudo pacman -S libnotify
 brew install terminal-notifier
 ```
 
-#### Windows (Coming Soon)
-- Claude Code installed
-- PowerShell 5.1 or later
+#### Windows
+- Claude Code installed and configured
+- PowerShell 5.1 or later (included with Windows 10/11)
 - Optional: BurntToast module for rich notifications
 
 ```powershell
 # Install BurntToast (optional, for rich notifications)
-Install-Module -Name BurntToast
+Install-Module -Name BurntToast -Scope CurrentUser
 ```
 
 ### Install Steps
