@@ -16,6 +16,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-notify"
 CONFIG_FILE="${CONFIG_DIR}/config.json"
+PROJECT_CONFIG_NAME=".claude-notify.json"
 
 # Defaults
 DEFAULT_BACKEND="auto"
@@ -149,6 +150,38 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Find project-specific config file (walks up directory tree)
+find_project_config() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -f "$dir/$PROJECT_CONFIG_NAME" ]]; then
+            echo "$dir/$PROJECT_CONFIG_NAME"
+            return 0
+        fi
+        dir="$(dirname "$dir")"
+    done
+    return 1
+}
+
+# Merge two JSON configs (second takes precedence)
+merge_configs() {
+    local base="$1"
+    local overlay="$2"
+
+    if ! command -v jq &>/dev/null; then
+        # Without jq, just use overlay if it exists
+        if [[ -f "$overlay" ]]; then
+            cat "$overlay"
+        else
+            cat "$base"
+        fi
+        return
+    fi
+
+    # Deep merge: overlay values take precedence
+    jq -s '.[0] * .[1]' "$base" "$overlay" 2>/dev/null
+}
+
 # Validate configuration file
 validate_config() {
     local config_file="$1"
@@ -233,15 +266,31 @@ validate_config() {
 
 # Load configuration
 load_config() {
-    if [[ -f "$CONFIG_FILE" ]]; then
-        # Check if jq is available
-        if command -v jq &>/dev/null; then
-            CONFIG_BACKEND=$(jq -r '.backend // "auto"' "$CONFIG_FILE" 2>/dev/null || echo "auto")
-            CONFIG_ICON=$(jq -r '.icon // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
+    local effective_config=""
+    local project_config=""
+
+    # Check for project-specific config
+    project_config=$(find_project_config 2>/dev/null || echo "")
+
+    # Check if jq is available
+    if command -v jq &>/dev/null; then
+        # Determine effective config (merge global + project)
+        if [[ -f "$CONFIG_FILE" && -n "$project_config" && -f "$project_config" ]]; then
+            # Merge global and project configs
+            effective_config=$(merge_configs "$CONFIG_FILE" "$project_config")
+        elif [[ -n "$project_config" && -f "$project_config" ]]; then
+            effective_config=$(cat "$project_config")
+        elif [[ -f "$CONFIG_FILE" ]]; then
+            effective_config=$(cat "$CONFIG_FILE")
+        fi
+
+        if [[ -n "$effective_config" ]]; then
+            CONFIG_BACKEND=$(echo "$effective_config" | jq -r '.backend // "auto"' 2>/dev/null || echo "auto")
+            CONFIG_ICON=$(echo "$effective_config" | jq -r '.icon // ""' 2>/dev/null || echo "")
 
             # Load notification-specific settings if type is set
             if [[ -n "$TYPE" ]]; then
-                local type_enabled=$(jq -r ".notifications.${TYPE}_needed.enabled // .notifications.task_${TYPE}.enabled // true" "$CONFIG_FILE" 2>/dev/null || echo "true")
+                local type_enabled=$(echo "$effective_config" | jq -r ".notifications.${TYPE}_needed.enabled // .notifications.task_${TYPE}.enabled // true" 2>/dev/null || echo "true")
                 if [[ "$type_enabled" == "false" ]]; then
                     exit 0  # Notification type is disabled
                 fi
