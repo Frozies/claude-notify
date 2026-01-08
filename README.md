@@ -420,6 +420,7 @@ Apache 2.0 - See [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
 
+- Inspired by [Claude Code Hooks: Automating macOS Notifications for Task Completion](https://nakamasato.medium.com/claude-code-hooks-automating-macos-notifications-for-task-completion-42d200e751cc) by nakamasato
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) by Anthropic
 - [ntfy](https://ntfy.sh) by Philipp C. Heckel
 - [libnotify](https://gitlab.gnome.org/GNOME/libnotify) by the GNOME project
