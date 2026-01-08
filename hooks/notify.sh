@@ -71,6 +71,8 @@ CATEGORY=""
 ACTION=""
 WAIT_FOR_ACTION=false
 TEST_MODE=false
+VALIDATE_MODE=false
+VALIDATE_FILE=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -114,6 +116,14 @@ while [[ $# -gt 0 ]]; do
             TEST_MODE=true
             shift
             ;;
+        --validate)
+            VALIDATE_MODE=true
+            if [[ -n "${2:-}" && ! "$2" =~ ^-- ]]; then
+                VALIDATE_FILE="$2"
+                shift
+            fi
+            shift
+            ;;
         --help|-h)
             echo "Usage: notify.sh [OPTIONS]"
             echo ""
@@ -128,6 +138,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --action, -a ACTION  Add action button (format: id=Label)"
             echo "  --wait, -w           Wait for action response (Linux only)"
             echo "  --test               Send a test notification"
+            echo "  --validate [FILE]    Validate configuration file and exit"
             echo "  --help, -h           Show this help message"
             exit 0
             ;;
@@ -137,6 +148,88 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Validate configuration file
+validate_config() {
+    local config_file="$1"
+    local errors=()
+
+    if [[ ! -f "$config_file" ]]; then
+        echo "Config file not found: $config_file"
+        return 1
+    fi
+
+    # Check if jq is available
+    if ! command -v jq &>/dev/null; then
+        echo "Warning: jq not installed, skipping config validation"
+        return 0
+    fi
+
+    # Validate JSON syntax
+    if ! jq '.' "$config_file" &>/dev/null; then
+        echo "Invalid JSON syntax in $config_file"
+        return 1
+    fi
+
+    # Validate backend value
+    local backend
+    backend=$(jq -r '.backend // "auto"' "$config_file" 2>/dev/null)
+    local valid_backends="auto notify-send osascript terminal-notifier powershell ntfy pushover"
+    if [[ ! " $valid_backends " =~ " $backend " ]]; then
+        errors+=("Invalid backend '$backend'. Valid: $valid_backends")
+    fi
+
+    # Validate urgency levels in notifications
+    local urgency_fields=("input_needed" "task_complete" "error")
+    local valid_urgencies="low normal critical"
+    for field in "${urgency_fields[@]}"; do
+        local urgency
+        urgency=$(jq -r ".notifications.${field}.urgency // \"normal\"" "$config_file" 2>/dev/null)
+        if [[ -n "$urgency" && ! " $valid_urgencies " =~ " $urgency " ]]; then
+            errors+=("Invalid urgency '$urgency' in notifications.${field}. Valid: $valid_urgencies")
+        fi
+    done
+
+    # Validate quiet hours format (HH:MM)
+    local quiet_start quiet_end
+    quiet_start=$(jq -r '.quiet_hours.start // ""' "$config_file" 2>/dev/null)
+    quiet_end=$(jq -r '.quiet_hours.end // ""' "$config_file" 2>/dev/null)
+    local time_regex='^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    if [[ -n "$quiet_start" && ! "$quiet_start" =~ $time_regex ]]; then
+        errors+=("Invalid quiet_hours.start format '$quiet_start'. Use HH:MM (24-hour)")
+    fi
+    if [[ -n "$quiet_end" && ! "$quiet_end" =~ $time_regex ]]; then
+        errors+=("Invalid quiet_hours.end format '$quiet_end'. Use HH:MM (24-hour)")
+    fi
+
+    # Validate ntfy priority
+    local ntfy_priority
+    ntfy_priority=$(jq -r '.backends.ntfy.priority // "default"' "$config_file" 2>/dev/null)
+    local valid_ntfy_priorities="min low default high max urgent"
+    if [[ -n "$ntfy_priority" && ! " $valid_ntfy_priorities " =~ " $ntfy_priority " ]]; then
+        errors+=("Invalid ntfy priority '$ntfy_priority'. Valid: $valid_ntfy_priorities")
+    fi
+
+    # Validate pushover priority (-2 to 2)
+    local pushover_priority
+    pushover_priority=$(jq -r '.backends.pushover.priority // 0' "$config_file" 2>/dev/null)
+    if [[ "$pushover_priority" =~ ^-?[0-9]+$ ]]; then
+        if (( pushover_priority < -2 || pushover_priority > 2 )); then
+            errors+=("Invalid pushover priority '$pushover_priority'. Must be between -2 and 2")
+        fi
+    fi
+
+    # Report errors
+    if [[ ${#errors[@]} -gt 0 ]]; then
+        echo "Configuration errors in $config_file:"
+        for err in "${errors[@]}"; do
+            echo "  - $err"
+        done
+        return 1
+    fi
+
+    return 0
+}
 
 # Load configuration
 load_config() {
@@ -376,6 +469,23 @@ send_pushover() {
 
 # Main function
 main() {
+    # Validate mode - just validate config and exit
+    if [[ "$VALIDATE_MODE" == true ]]; then
+        local file_to_validate="${VALIDATE_FILE:-$CONFIG_FILE}"
+        if [[ -f "$file_to_validate" ]]; then
+            if validate_config "$file_to_validate"; then
+                echo "Configuration is valid: $file_to_validate"
+                exit 0
+            else
+                exit 1
+            fi
+        else
+            echo "No configuration file found at $file_to_validate"
+            echo "Using default settings."
+            exit 0
+        fi
+    fi
+
     load_config
 
     # Test mode
