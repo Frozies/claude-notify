@@ -16,7 +16,7 @@ Multi-platform notification system for [Claude Code](https://docs.anthropic.com/
 | Linux | `notify-send` (libnotify) | Stable |
 | macOS | `osascript` / `terminal-notifier` | Stable |
 | Windows | PowerShell Toast / BurntToast | Stable |
-| Mobile | ntfy.sh | Planned |
+| Mobile | ntfy.sh | Stable |
 | Mobile | Pushover | Planned |
 
 ## Quick Start
@@ -208,6 +208,10 @@ export CLAUDE_NOTIFY_BACKEND="ntfy"
 export CLAUDE_NOTIFY_ICON="/path/to/icon.png"
 export CLAUDE_NOTIFY_NTFY_TOPIC="my-topic"
 export CLAUDE_NOTIFY_NTFY_SERVER="https://ntfy.example.com"
+export CLAUDE_NOTIFY_NTFY_TAGS="robot,bell"
+export CLAUDE_NOTIFY_NTFY_CLICK="https://example.com"
+export CLAUDE_NOTIFY_NTFY_ACTIONS="view, Open Terminal, https://..."
+export CLAUDE_NOTIFY_NTFY_TOKEN="tk_your_access_token"
 export CLAUDE_NOTIFY_PUSHOVER_USER="your-user-key"
 export CLAUDE_NOTIFY_PUSHOVER_TOKEN="your-api-token"
 ```
@@ -279,24 +283,44 @@ Free, open-source push notification service. Get notifications on your phone!
     "ntfy": {
       "server": "https://ntfy.sh",
       "topic": "your-private-unique-topic",
-      "priority": "default"
+      "priority": "default",
+      "tags": "robot",
+      "click": "https://example.com",
+      "actions": "view, Open Docs, https://docs.anthropic.com"
     }
   }
 }
 ```
 
-**Self-hosted ntfy:**
+**ntfy Configuration Options:**
+
+| Option | Description |
+|--------|-------------|
+| `server` | ntfy server URL (default: `https://ntfy.sh`) |
+| `topic` | Your unique notification topic (required) |
+| `priority` | Priority level: `min`, `low`, `default`, `high`, `max`, `urgent` |
+| `tags` | Comma-separated emoji tags (e.g., `robot,bell`) |
+| `click` | URL to open when notification is clicked |
+| `actions` | Action buttons (format: `type, label, url; type2, label2, url2`) |
+| `token` | Bearer token for authentication (self-hosted servers) |
+
+**Self-hosted ntfy with authentication:**
 ```json
 {
   "backends": {
     "ntfy": {
       "server": "https://ntfy.yourdomain.com",
       "topic": "claude",
-      "username": "user",
-      "password": "pass"
+      "token": "tk_your_access_token"
     }
   }
 }
+```
+
+**Sending attachments:**
+```bash
+# Attach a file (e.g., screenshot or log)
+./hooks/notify.sh --backend ntfy --type error --attach /path/to/screenshot.png
 ```
 
 ### Pushover (Cross-platform Push)

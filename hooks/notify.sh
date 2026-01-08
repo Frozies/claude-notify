@@ -82,6 +82,7 @@ WAIT_FOR_ACTION=false
 TEST_MODE=false
 VALIDATE_MODE=false
 VALIDATE_FILE=""
+ATTACHMENT=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -126,6 +127,10 @@ while [[ $# -gt 0 ]]; do
             SOUND="false"
             shift
             ;;
+        --attach)
+            ATTACHMENT="$2"
+            shift 2
+            ;;
         --wait|-w)
             WAIT_FOR_ACTION=true
             shift
@@ -164,6 +169,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --action, -a ACTION  Add action button (format: id=Label)"
             echo "  --sound, -s [NAME]   Play notification sound (macOS: sound name)"
             echo "  --no-sound           Disable notification sound"
+            echo "  --attach PATH/URL    Attach file or URL to notification (ntfy only)"
             echo "  --wait, -w           Wait for action response (Linux only)"
             echo "  --test               Send a test notification"
             echo "  --validate [FILE]    Validate configuration file and exit"
@@ -528,16 +534,24 @@ send_ntfy() {
     local title="$1"
     local message="$2"
     local priority="${3:-default}"
+    local notification_type="${4:-}"
+    local attachment="${5:-}"
 
     local server="${CLAUDE_NOTIFY_NTFY_SERVER:-https://ntfy.sh}"
     local topic="${CLAUDE_NOTIFY_NTFY_TOPIC:-}"
+    local tags="${CLAUDE_NOTIFY_NTFY_TAGS:-}"
+    local click_url="${CLAUDE_NOTIFY_NTFY_CLICK:-}"
+    local actions="${CLAUDE_NOTIFY_NTFY_ACTIONS:-}"
+    local auth_token="${CLAUDE_NOTIFY_NTFY_TOKEN:-}"
 
-    if [[ -z "$topic" ]]; then
-        # Try to read from config
-        if [[ -f "$CONFIG_FILE" ]] && command -v jq &>/dev/null; then
-            topic=$(jq -r '.backends.ntfy.topic // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
-            server=$(jq -r '.backends.ntfy.server // "https://ntfy.sh"' "$CONFIG_FILE" 2>/dev/null || echo "$server")
-        fi
+    # Try to read from config
+    if [[ -f "$CONFIG_FILE" ]] && command -v jq &>/dev/null; then
+        [[ -z "$topic" ]] && topic=$(jq -r '.backends.ntfy.topic // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
+        [[ -z "$server" || "$server" == "https://ntfy.sh" ]] && server=$(jq -r '.backends.ntfy.server // "https://ntfy.sh"' "$CONFIG_FILE" 2>/dev/null || echo "$server")
+        [[ -z "$tags" ]] && tags=$(jq -r '.backends.ntfy.tags // "robot"' "$CONFIG_FILE" 2>/dev/null || echo "robot")
+        [[ -z "$click_url" ]] && click_url=$(jq -r '.backends.ntfy.click // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
+        [[ -z "$actions" ]] && actions=$(jq -r '.backends.ntfy.actions // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
+        [[ -z "$auth_token" ]] && auth_token=$(jq -r '.backends.ntfy.token // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
     fi
 
     if [[ -z "$topic" ]]; then
@@ -545,6 +559,7 @@ send_ntfy() {
         return 1
     fi
 
+    # Map urgency to ntfy priority
     local ntfy_priority="default"
     case "$priority" in
         low) ntfy_priority="low" ;;
@@ -552,12 +567,83 @@ send_ntfy() {
         critical) ntfy_priority="urgent" ;;
     esac
 
-    curl -s \
-        -H "Title: $title" \
-        -H "Priority: $ntfy_priority" \
-        -H "Tags: robot" \
-        -d "$message" \
-        "${server}/${topic}" >/dev/null
+    # Override priority from config if specified
+    if [[ -f "$CONFIG_FILE" ]] && command -v jq &>/dev/null; then
+        local config_priority
+        config_priority=$(jq -r '.backends.ntfy.priority // ""' "$CONFIG_FILE" 2>/dev/null || echo "")
+        if [[ -n "$config_priority" && "$config_priority" != "default" ]]; then
+            ntfy_priority="$config_priority"
+        fi
+    fi
+
+    # Add notification-type-specific tags
+    local type_tags=""
+    case "$notification_type" in
+        input) type_tags="question,bell" ;;
+        complete) type_tags="white_check_mark" ;;
+        error) type_tags="warning,exclamation" ;;
+    esac
+
+    # Combine tags (config tags + type-specific tags)
+    local final_tags="$tags"
+    if [[ -n "$type_tags" ]]; then
+        if [[ -n "$final_tags" ]]; then
+            final_tags="${final_tags},${type_tags}"
+        else
+            final_tags="$type_tags"
+        fi
+    fi
+
+    # Build curl arguments
+    local curl_args=()
+    curl_args+=(-s)
+    curl_args+=(-H "Title: $title")
+    curl_args+=(-H "Priority: $ntfy_priority")
+
+    if [[ -n "$final_tags" ]]; then
+        curl_args+=(-H "Tags: $final_tags")
+    fi
+
+    # Add click action (opens URL when notification is clicked)
+    if [[ -n "$click_url" ]]; then
+        curl_args+=(-H "Click: $click_url")
+    fi
+
+    # Add action buttons
+    # Format: "action=view, Open Terminal, http://...; action=http, View Logs, http://..."
+    if [[ -n "$actions" ]]; then
+        curl_args+=(-H "Actions: $actions")
+    fi
+
+    # Add attachment if specified
+    if [[ -n "$attachment" ]]; then
+        if [[ "$attachment" =~ ^https?:// ]]; then
+            # URL attachment
+            curl_args+=(-H "Attach: $attachment")
+        elif [[ -f "$attachment" ]]; then
+            # File attachment - use filename header and send file contents
+            local filename
+            filename=$(basename "$attachment")
+            curl_args+=(-H "Filename: $filename")
+            curl_args+=(-T "$attachment")
+        fi
+    fi
+
+    # Add authentication if token is provided
+    if [[ -n "$auth_token" ]]; then
+        curl_args+=(-H "Authorization: Bearer $auth_token")
+    fi
+
+    # Send notification
+    if [[ -n "$attachment" && -f "$attachment" ]]; then
+        # File upload mode - message goes in header
+        curl_args+=(-H "Message: $message")
+        curl "${curl_args[@]}" "${server}/${topic}" >/dev/null
+    else
+        # Standard mode - message in body
+        curl_args+=(-d "$message")
+        curl "${curl_args[@]}" "${server}/${topic}" >/dev/null
+    fi
 }
 
 # Send notification via Pushover
@@ -674,7 +760,7 @@ main() {
             send_powershell "$TITLE" "$MESSAGE"
             ;;
         ntfy)
-            send_ntfy "$TITLE" "$MESSAGE" "$URGENCY"
+            send_ntfy "$TITLE" "$MESSAGE" "$URGENCY" "$TYPE" "$ATTACHMENT"
             ;;
         pushover)
             send_pushover "$TITLE" "$MESSAGE" "$URGENCY"

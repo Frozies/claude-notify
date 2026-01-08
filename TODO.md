@@ -77,13 +77,13 @@ This document tracks the development progress of Claude Notify, a multi-platform
 ## Phase 4: Push Notification Services
 
 ### 4.1 ntfy.sh Integration
-- [ ] Create ntfy notification backend
-- [ ] Support self-hosted ntfy servers
-- [ ] Add priority levels mapping
-- [ ] Support ntfy tags/emojis
-- [ ] Add attachment support (screenshots, logs)
-- [ ] Support ntfy actions (buttons with URLs)
-- [ ] Add click action to open Claude Code
+- [x] Create ntfy notification backend
+- [x] Support self-hosted ntfy servers
+- [x] Add priority levels mapping
+- [x] Support ntfy tags/emojis
+- [x] Add attachment support (screenshots, logs)
+- [x] Support ntfy actions (buttons with URLs)
+- [x] Add click action to open Claude Code
 
 ### 4.2 Pushover Integration
 - [ ] Create Pushover notification backend
@@ -157,7 +157,7 @@ This document tracks the development progress of Claude Notify, a multi-platform
 - [ ] Add troubleshooting guide
 - [ ] Create video tutorial
 - [ ] Add architecture documentation
-- [ ] Create contribution guidelines (CONTRIBUTING.md)
+- [x] Create contribution guidelines (CONTRIBUTING.md)
 
 ### 6.3 Distribution
 - [ ] Publish to GitHub

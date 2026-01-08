@@ -42,7 +42,10 @@
       "server": "https://ntfy.sh",
       "topic": "",
       "priority": "default",
-      "tags": "robot"
+      "tags": "robot",
+      "click": "",
+      "actions": "",
+      "token": ""
     },
     "pushover": {
       "user_key": "",
