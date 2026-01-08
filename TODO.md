@@ -154,9 +154,6 @@ This document tracks the development progress of Claude Notify, a multi-platform
 - [x] Create comprehensive README
 - [x] Add installation instructions for all platforms
 - [x] Document configuration options
-- [ ] Add troubleshooting guide
-- [ ] Create video tutorial
-- [ ] Add architecture documentation
 - [x] Create contribution guidelines (CONTRIBUTING.md)
 
 ### 6.3 Distribution
@@ -166,45 +163,6 @@ This document tracks the development progress of Claude Notify, a multi-platform
 - [ ] Create AUR package (Arch Linux)
 - [ ] Create .deb package (Debian/Ubuntu)
 - [ ] Create .rpm package (Fedora/RHEL)
-- [ ] Add to Claude Code plugin marketplace (if available)
-
----
-
-## Phase 7: Ecosystem Integration
-
-### 7.1 IDE Integration
-- [ ] Document VS Code + Claude Code setup
-- [ ] Document JetBrains IDE setup
-- [ ] Add workspace-specific notification settings
-
-### 7.2 Mobile Companion App (Stretch Goal)
-- [ ] Design mobile app for notification management
-- [ ] Add quick reply functionality
-- [ ] Support viewing Claude Code session status
-- [ ] Add remote session reconnection
-
----
-
-## Backlog / Ideas
-
-- [ ] Support for email notifications
-- [ ] Integration with Home Assistant
-- [ ] Physical notification devices (blink(1), etc.)
-- [ ] Voice announcements (text-to-speech)
-- [ ] Integration with calendar for smart scheduling
-- [ ] AI-powered notification summarization
-- [ ] Notification analytics and insights
-
----
-
-## Version History
-
-### v0.1.0 (Initial Release)
-- Linux notify-send support
-- Basic configuration system
-- Install/uninstall scripts
-- Documentation
-
 ---
 
 ## Contributing
