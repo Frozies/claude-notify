@@ -6,6 +6,24 @@
 
 set -euo pipefail
 
+# Parse arguments
+DRY_RUN=false
+for arg in "$@"; do
+    case $arg in
+        --dry-run|-n)
+            DRY_RUN=true
+            ;;
+        --help|-h)
+            echo "Usage: install.sh [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --dry-run, -n  Show what would be done without making changes"
+            echo "  --help, -h     Show this help message"
+            exit 0
+            ;;
+    esac
+done
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -26,6 +44,17 @@ info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 success() { echo -e "${GREEN}[OK]${NC} $1"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
+dry_run_msg() { echo -e "${YELLOW}[DRY-RUN]${NC} Would: $1"; }
+
+# Execute command or show what would be done in dry-run mode
+run_cmd() {
+    if [[ "$DRY_RUN" == true ]]; then
+        dry_run_msg "$*"
+        return 0
+    else
+        "$@"
+    fi
+}
 
 # Check dependencies
 check_dependencies() {
@@ -91,7 +120,11 @@ check_claude_code() {
 backup_settings() {
     if [[ -f "$CLAUDE_SETTINGS" ]]; then
         local backup="${CLAUDE_SETTINGS}.backup.$(date +%Y%m%d_%H%M%S)"
-        cp "$CLAUDE_SETTINGS" "$backup"
+        if [[ "$DRY_RUN" == true ]]; then
+            dry_run_msg "cp $CLAUDE_SETTINGS $backup"
+        else
+            cp "$CLAUDE_SETTINGS" "$backup"
+        fi
         info "Backed up settings to $backup"
     fi
 }
@@ -100,8 +133,13 @@ backup_settings() {
 create_directories() {
     info "Creating directories..."
 
-    mkdir -p "$CONFIG_DIR/hooks"
-    mkdir -p "$ICON_DIR"
+    if [[ "$DRY_RUN" == true ]]; then
+        dry_run_msg "mkdir -p $CONFIG_DIR/hooks"
+        dry_run_msg "mkdir -p $ICON_DIR"
+    else
+        mkdir -p "$CONFIG_DIR/hooks"
+        mkdir -p "$ICON_DIR"
+    fi
 
     success "Directories created"
 }
@@ -110,8 +148,13 @@ create_directories() {
 install_hooks() {
     info "Installing hook scripts..."
 
-    cp "$SCRIPT_DIR/hooks/notify.sh" "$CONFIG_DIR/hooks/"
-    chmod +x "$CONFIG_DIR/hooks/notify.sh"
+    if [[ "$DRY_RUN" == true ]]; then
+        dry_run_msg "cp $SCRIPT_DIR/hooks/notify.sh $CONFIG_DIR/hooks/"
+        dry_run_msg "chmod +x $CONFIG_DIR/hooks/notify.sh"
+    else
+        cp "$SCRIPT_DIR/hooks/notify.sh" "$CONFIG_DIR/hooks/"
+        chmod +x "$CONFIG_DIR/hooks/notify.sh"
+    fi
 
     success "Hook scripts installed to $CONFIG_DIR/hooks/"
 }
@@ -120,9 +163,18 @@ install_hooks() {
 install_config() {
     info "Installing configuration..."
 
-    if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
-        cp "$SCRIPT_DIR/config/config.example.json" "$CONFIG_DIR/config.json"
-        success "Configuration installed to $CONFIG_DIR/config.json"
+    if [[ ! -f "$CONFIG_DIR/config.json" ]] || [[ "$DRY_RUN" == true ]]; then
+        if [[ "$DRY_RUN" == true ]]; then
+            if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
+                dry_run_msg "cp $SCRIPT_DIR/config/config.example.json $CONFIG_DIR/config.json"
+                success "Configuration installed to $CONFIG_DIR/config.json"
+            else
+                info "Configuration already exists, skipping"
+            fi
+        else
+            cp "$SCRIPT_DIR/config/config.example.json" "$CONFIG_DIR/config.json"
+            success "Configuration installed to $CONFIG_DIR/config.json"
+        fi
     else
         info "Configuration already exists, skipping"
     fi
@@ -141,7 +193,11 @@ install_icon() {
 
     # Check if we have an icon in the repo
     if [[ -f "$SCRIPT_DIR/icons/claude-ai.png" ]]; then
-        cp "$SCRIPT_DIR/icons/claude-ai.png" "$ICON_DIR/"
+        if [[ "$DRY_RUN" == true ]]; then
+            dry_run_msg "cp $SCRIPT_DIR/icons/claude-ai.png $ICON_DIR/"
+        else
+            cp "$SCRIPT_DIR/icons/claude-ai.png" "$ICON_DIR/"
+        fi
         success "Icon installed to $ICON_DIR/claude-ai.png"
     else
         warn "No icon found. Notifications will use system default icon."
@@ -160,24 +216,26 @@ configure_hooks() {
     local current_settings
     current_settings=$(cat "$CLAUDE_SETTINGS")
 
-    # Check if hooks already exist
-    if echo "$current_settings" | jq -e '.hooks.Notification' &>/dev/null; then
-        warn "Notification hook already exists in Claude Code settings"
-        read -p "Overwrite existing Notification hook? [y/N] " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            info "Keeping existing Notification hook"
-            notify_cmd=""
+    # Check if hooks already exist (skip prompts in dry-run mode)
+    if [[ "$DRY_RUN" != true ]]; then
+        if echo "$current_settings" | jq -e '.hooks.Notification' &>/dev/null; then
+            warn "Notification hook already exists in Claude Code settings"
+            read -p "Overwrite existing Notification hook? [y/N] " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                info "Keeping existing Notification hook"
+                notify_cmd=""
+            fi
         fi
-    fi
 
-    if echo "$current_settings" | jq -e '.hooks.Stop' &>/dev/null; then
-        warn "Stop hook already exists in Claude Code settings"
-        read -p "Overwrite existing Stop hook? [y/N] " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            info "Keeping existing Stop hook"
-            stop_cmd=""
+        if echo "$current_settings" | jq -e '.hooks.Stop' &>/dev/null; then
+            warn "Stop hook already exists in Claude Code settings"
+            read -p "Overwrite existing Stop hook? [y/N] " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                info "Keeping existing Stop hook"
+                stop_cmd=""
+            fi
         fi
     fi
 
@@ -217,13 +275,24 @@ configure_hooks() {
     fi
 
     # Write updated settings
-    echo "$new_settings" | jq '.' > "$CLAUDE_SETTINGS"
+    if [[ "$DRY_RUN" == true ]]; then
+        dry_run_msg "Update $CLAUDE_SETTINGS with hooks configuration"
+        info "Would add Notification hook: $notify_cmd"
+        info "Would add Stop hook: $stop_cmd"
+    else
+        echo "$new_settings" | jq '.' > "$CLAUDE_SETTINGS"
+    fi
 
     success "Claude Code hooks configured"
 }
 
 # Test notification
 test_notification() {
+    if [[ "$DRY_RUN" == true ]]; then
+        dry_run_msg "Send test notification via $CONFIG_DIR/hooks/notify.sh --test"
+        return
+    fi
+
     read -p "Send a test notification? [Y/n] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Nn]$ ]]; then
@@ -265,6 +334,11 @@ main() {
     echo -e "${BLUE}  Claude Notify Installer${NC}"
     echo -e "${BLUE}======================================${NC}"
     echo ""
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo -e "${YELLOW}Running in DRY-RUN mode - no changes will be made${NC}"
+        echo ""
+    fi
 
     check_dependencies
     check_claude_code
