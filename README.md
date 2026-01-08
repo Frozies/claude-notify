@@ -14,7 +14,7 @@ Multi-platform notification system for [Claude Code](https://docs.anthropic.com/
 | Platform | Backend | Status |
 |----------|---------|--------|
 | Linux | `notify-send` (libnotify) | Stable |
-| macOS | `osascript` / `terminal-notifier` | Planned |
+| macOS | `osascript` / `terminal-notifier` | Stable |
 | Windows | PowerShell Toast / BurntToast | Stable |
 | Mobile | ntfy.sh | Planned |
 | Mobile | Pushover | Planned |
@@ -22,6 +22,17 @@ Multi-platform notification system for [Claude Code](https://docs.anthropic.com/
 ## Quick Start
 
 ### Linux
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/claude-notify.git
+cd claude-notify
+
+# Run the installer
+./install.sh
+```
+
+### macOS
 
 ```bash
 # Clone the repository
@@ -68,14 +79,16 @@ sudo dnf install libnotify
 sudo pacman -S libnotify
 ```
 
-#### macOS (Coming Soon)
-- Claude Code installed
+#### macOS
+- Claude Code installed and configured
 - Either `terminal-notifier` (recommended) or built-in `osascript`
 
 ```bash
 # Install terminal-notifier via Homebrew (optional, for richer notifications)
 brew install terminal-notifier
 ```
+
+The installer will automatically detect Homebrew and offer to install `terminal-notifier` for you.
 
 #### Windows
 - Claude Code installed and configured

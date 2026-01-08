@@ -177,8 +177,28 @@ check_dependencies() {
         Darwin*)
             info "macOS detected"
             if ! command -v terminal-notifier &>/dev/null; then
-                warn "terminal-notifier not found. Install via: brew install terminal-notifier"
-                info "Falling back to osascript (basic notifications)"
+                warn "terminal-notifier not found (optional, for richer notifications)"
+                if command -v brew &>/dev/null; then
+                    if [[ "$DRY_RUN" != true ]]; then
+                        read -p "Install terminal-notifier via Homebrew? [y/N] " -n 1 -r
+                        echo
+                        if [[ $REPLY =~ ^[Yy]$ ]]; then
+                            info "Installing terminal-notifier..."
+                            brew install terminal-notifier
+                            success "terminal-notifier installed"
+                        else
+                            info "Falling back to osascript (basic notifications)"
+                        fi
+                    else
+                        dry_run_msg "Offer to install terminal-notifier via Homebrew"
+                    fi
+                else
+                    info "Homebrew not found. Install terminal-notifier manually for richer notifications:"
+                    echo "  brew install terminal-notifier"
+                    info "Falling back to osascript (basic notifications)"
+                fi
+            else
+                success "terminal-notifier found (rich notifications available)"
             fi
             ;;
     esac
@@ -284,21 +304,32 @@ install_config() {
 install_icon() {
     info "Setting up notification icon..."
 
+    local icon_name="claude-ai.png"
+    local icon_ext="png"
+
+    # Use .icns on macOS if available
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        if [[ -f "$SCRIPT_DIR/icons/claude-ai.icns" ]]; then
+            icon_name="claude-ai.icns"
+            icon_ext="icns"
+        fi
+    fi
+
     # Check for existing Claude icon
-    local existing_icon="$HOME/.local/share/icons/claude-ai.png"
+    local existing_icon="$ICON_DIR/claude-ai.$icon_ext"
     if [[ -f "$existing_icon" ]]; then
         success "Using existing Claude icon at $existing_icon"
         return
     fi
 
     # Check if we have an icon in the repo
-    if [[ -f "$SCRIPT_DIR/icons/claude-ai.png" ]]; then
+    if [[ -f "$SCRIPT_DIR/icons/$icon_name" ]]; then
         if [[ "$DRY_RUN" == true ]]; then
-            dry_run_msg "cp $SCRIPT_DIR/icons/claude-ai.png $ICON_DIR/"
+            dry_run_msg "cp $SCRIPT_DIR/icons/$icon_name $ICON_DIR/"
         else
-            cp "$SCRIPT_DIR/icons/claude-ai.png" "$ICON_DIR/"
+            cp "$SCRIPT_DIR/icons/$icon_name" "$ICON_DIR/"
         fi
-        success "Icon installed to $ICON_DIR/claude-ai.png"
+        success "Icon installed to $ICON_DIR/$icon_name"
     else
         warn "No icon found. Notifications will use system default icon."
         info "You can add a custom icon later at $ICON_DIR/claude-ai.png"

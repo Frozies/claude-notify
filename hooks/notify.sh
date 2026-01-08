@@ -62,6 +62,12 @@ declare -A PRESET_ACTIONS=(
     [error]="view=View Error"
 )
 
+declare -A PRESET_SOUNDS=(
+    [input]="default"
+    [complete]="false"
+    [error]="default"
+)
+
 # Parse command line arguments
 TYPE=""
 TITLE=""
@@ -71,6 +77,7 @@ URGENCY=""
 ICON=""
 CATEGORY=""
 ACTION=""
+SOUND=""
 WAIT_FOR_ACTION=false
 TEST_MODE=false
 VALIDATE_MODE=false
@@ -110,6 +117,15 @@ while [[ $# -gt 0 ]]; do
             ACTION="$2"
             shift 2
             ;;
+        --sound|-s)
+            SOUND="${2:-default}"
+            shift
+            [[ "${1:-}" != -* ]] && shift 2>/dev/null || true
+            ;;
+        --no-sound)
+            SOUND="false"
+            shift
+            ;;
         --wait|-w)
             WAIT_FOR_ACTION=true
             shift
@@ -146,6 +162,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --icon, -i PATH      Path to icon file"
             echo "  --category, -c CAT   Notification category (e.g., im.received)"
             echo "  --action, -a ACTION  Add action button (format: id=Label)"
+            echo "  --sound, -s [NAME]   Play notification sound (macOS: sound name)"
+            echo "  --no-sound           Disable notification sound"
             echo "  --wait, -w           Wait for action response (Linux only)"
             echo "  --test               Send a test notification"
             echo "  --validate [FILE]    Validate configuration file and exit"
@@ -399,29 +417,83 @@ send_notify_send() {
 send_osascript() {
     local title="$1"
     local message="$2"
+    local subtitle="${3:-}"
+    local sound="${4:-}"
 
-    osascript -e "display notification \"$message\" with title \"$title\""
+    local script="display notification \"$message\" with title \"$title\""
+
+    # Add subtitle if provided
+    if [[ -n "$subtitle" ]]; then
+        script="$script subtitle \"$subtitle\""
+    fi
+
+    # Add sound if requested
+    if [[ -n "$sound" && "$sound" != "false" ]]; then
+        # Use default sound or specified sound name
+        if [[ "$sound" == "true" || "$sound" == "default" ]]; then
+            script="$script sound name \"default\""
+        else
+            script="$script sound name \"$sound\""
+        fi
+    fi
+
+    osascript -e "$script"
 }
 
 # Send notification via terminal-notifier (macOS)
 send_terminal_notifier() {
     local title="$1"
     local message="$2"
-    local icon="$3"
+    local icon="${3:-}"
+    local subtitle="${4:-}"
+    local sound="${5:-}"
+    local action_label="${6:-}"
 
     local args=()
     args+=("-title" "$title")
     args+=("-message" "$message")
     args+=("-group" "claude-notify")
+    args+=("-sender" "com.anthropic.claude-code")
 
+    # Add subtitle if provided
+    if [[ -n "$subtitle" ]]; then
+        args+=("-subtitle" "$subtitle")
+    fi
+
+    # Add icon if specified and exists
     if [[ -n "$icon" ]]; then
         local expanded_icon=$(expand_path "$icon")
         if [[ -f "$expanded_icon" ]]; then
-            args+=("-contentImage" "$expanded_icon")
+            # Use appIcon for .icns files, contentImage for others
+            if [[ "$expanded_icon" == *.icns ]]; then
+                args+=("-appIcon" "$expanded_icon")
+            else
+                args+=("-contentImage" "$expanded_icon")
+            fi
         fi
     fi
 
-    terminal-notifier "${args[@]}"
+    # Add sound if requested
+    if [[ -n "$sound" && "$sound" != "false" ]]; then
+        if [[ "$sound" == "true" ]]; then
+            args+=("-sound" "default")
+        else
+            args+=("-sound" "$sound")
+        fi
+    fi
+
+    # Add action button if specified
+    if [[ -n "$action_label" ]]; then
+        args+=("-actions" "$action_label")
+    fi
+
+    # Execute and capture result (clicked action)
+    local result
+    result=$(terminal-notifier "${args[@]}")
+
+    if [[ -n "$result" ]]; then
+        echo "$result"
+    fi
 }
 
 # Send notification via PowerShell (Windows)
@@ -568,6 +640,9 @@ main() {
         if [[ -z "$ACTION" ]]; then
             ACTION="${PRESET_ACTIONS[$TYPE]:-}"
         fi
+        if [[ -z "$SOUND" ]]; then
+            SOUND="${PRESET_SOUNDS[$TYPE]:-}"
+        fi
     fi
 
     # Require title and message
@@ -590,10 +665,10 @@ main() {
             send_notify_send "$TITLE" "$MESSAGE" "$URGENCY" "$ICON" "$CATEGORY" "$ACTION" "$WAIT_FOR_ACTION"
             ;;
         osascript)
-            send_osascript "$TITLE" "$MESSAGE"
+            send_osascript "$TITLE" "$MESSAGE" "" "$SOUND"
             ;;
         terminal-notifier)
-            send_terminal_notifier "$TITLE" "$MESSAGE" "$ICON"
+            send_terminal_notifier "$TITLE" "$MESSAGE" "$ICON" "" "$SOUND" "$ACTION"
             ;;
         powershell)
             send_powershell "$TITLE" "$MESSAGE"

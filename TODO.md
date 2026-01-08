@@ -43,17 +43,17 @@ This document tracks the development progress of Claude Notify, a multi-platform
 ## Phase 2: macOS Support
 
 ### 2.1 Native Notifications (osascript/terminal-notifier)
-- [ ] Create macOS notification script using osascript
-- [ ] Add terminal-notifier support for richer notifications
-- [ ] Support macOS notification center grouping
-- [ ] Add sound customization
-- [ ] Support notification actions
+- [x] Create macOS notification script using osascript
+- [x] Add terminal-notifier support for richer notifications
+- [x] Support macOS notification center grouping
+- [x] Add sound customization
+- [x] Support notification actions
 
 ### 2.2 macOS Installation
-- [ ] Create install.sh logic for macOS
-- [ ] Detect Homebrew and offer terminal-notifier install
-- [ ] Support macOS icon formats (.icns)
-- [ ] Handle macOS permission requirements
+- [x] Create install.sh logic for macOS
+- [x] Detect Homebrew and offer terminal-notifier install
+- [x] Support macOS icon formats (.icns)
+- [x] Handle macOS permission requirements
 
 ---
 
