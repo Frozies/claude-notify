@@ -1,0 +1,55 @@
+{
+  "backend": "auto",
+  "icon": "~/.local/share/icons/claude-ai.png",
+  "notifications": {
+    "input_needed": {
+      "enabled": true,
+      "title": "Claude Code",
+      "message": "Claude needs your input",
+      "urgency": "normal",
+      "sound": true
+    },
+    "task_complete": {
+      "enabled": true,
+      "title": "Claude Code",
+      "message": "Task completed",
+      "urgency": "low",
+      "sound": false
+    },
+    "error": {
+      "enabled": true,
+      "title": "Claude Code",
+      "message": "An error occurred",
+      "urgency": "critical",
+      "sound": true
+    }
+  },
+  "quiet_hours": {
+    "enabled": false,
+    "start": "22:00",
+    "end": "08:00"
+  },
+  "backends": {
+    "notify-send": {
+      "timeout": 5000,
+      "category": "im.received"
+    },
+    "terminal-notifier": {
+      "sound": "default",
+      "group": "claude-notify"
+    },
+    "ntfy": {
+      "server": "https://ntfy.sh",
+      "topic": "",
+      "priority": "default",
+      "tags": "robot"
+    },
+    "pushover": {
+      "user_key": "",
+      "api_token": "",
+      "device": "",
+      "priority": 0,
+      "sound": "pushover"
+    }
+  }
+}

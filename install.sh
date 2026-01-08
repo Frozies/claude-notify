@@ -1,0 +1,281 @@
+#!/usr/bin/env bash
+#
+# Claude Notify Installer
+# Installs notification hooks for Claude Code
+#
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Installation directories
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-notify"
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons"
+
+# Logging functions
+info() { echo -e "${BLUE}[INFO]${NC} $1"; }
+success() { echo -e "${GREEN}[OK]${NC} $1"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# Check dependencies
+check_dependencies() {
+    info "Checking dependencies..."
+
+    local missing=()
+
+    # Check for jq
+    if ! command -v jq &>/dev/null; then
+        missing+=("jq")
+    fi
+
+    # Platform-specific checks
+    case "$(uname -s)" in
+        Linux*)
+            if ! command -v notify-send &>/dev/null; then
+                warn "notify-send not found. Install libnotify-bin for desktop notifications."
+            fi
+            ;;
+        Darwin*)
+            info "macOS detected"
+            if ! command -v terminal-notifier &>/dev/null; then
+                warn "terminal-notifier not found. Install via: brew install terminal-notifier"
+                info "Falling back to osascript (basic notifications)"
+            fi
+            ;;
+    esac
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        error "Missing required dependencies: ${missing[*]}"
+        echo ""
+        echo "Install them with:"
+        echo "  Debian/Ubuntu: sudo apt install ${missing[*]}"
+        echo "  Fedora:        sudo dnf install ${missing[*]}"
+        echo "  Arch:          sudo pacman -S ${missing[*]}"
+        echo "  macOS:         brew install ${missing[*]}"
+        exit 1
+    fi
+
+    success "All required dependencies found"
+}
+
+# Check for Claude Code installation
+check_claude_code() {
+    info "Checking Claude Code installation..."
+
+    if [[ ! -d "$HOME/.claude" ]]; then
+        error "Claude Code configuration directory not found at ~/.claude"
+        echo "Please ensure Claude Code is installed and has been run at least once."
+        exit 1
+    fi
+
+    if [[ ! -f "$CLAUDE_SETTINGS" ]]; then
+        warn "Claude Code settings.json not found, will create it"
+        mkdir -p "$HOME/.claude"
+        echo '{}' > "$CLAUDE_SETTINGS"
+    fi
+
+    success "Claude Code installation found"
+}
+
+# Backup existing settings
+backup_settings() {
+    if [[ -f "$CLAUDE_SETTINGS" ]]; then
+        local backup="${CLAUDE_SETTINGS}.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$CLAUDE_SETTINGS" "$backup"
+        info "Backed up settings to $backup"
+    fi
+}
+
+# Create installation directories
+create_directories() {
+    info "Creating directories..."
+
+    mkdir -p "$CONFIG_DIR/hooks"
+    mkdir -p "$ICON_DIR"
+
+    success "Directories created"
+}
+
+# Install hook scripts
+install_hooks() {
+    info "Installing hook scripts..."
+
+    cp "$SCRIPT_DIR/hooks/notify.sh" "$CONFIG_DIR/hooks/"
+    chmod +x "$CONFIG_DIR/hooks/notify.sh"
+
+    success "Hook scripts installed to $CONFIG_DIR/hooks/"
+}
+
+# Install configuration
+install_config() {
+    info "Installing configuration..."
+
+    if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
+        cp "$SCRIPT_DIR/config/config.example.json" "$CONFIG_DIR/config.json"
+        success "Configuration installed to $CONFIG_DIR/config.json"
+    else
+        info "Configuration already exists, skipping"
+    fi
+}
+
+# Install icon (if available)
+install_icon() {
+    info "Setting up notification icon..."
+
+    # Check for existing Claude icon
+    local existing_icon="$HOME/.local/share/icons/claude-ai.png"
+    if [[ -f "$existing_icon" ]]; then
+        success "Using existing Claude icon at $existing_icon"
+        return
+    fi
+
+    # Check if we have an icon in the repo
+    if [[ -f "$SCRIPT_DIR/icons/claude-ai.png" ]]; then
+        cp "$SCRIPT_DIR/icons/claude-ai.png" "$ICON_DIR/"
+        success "Icon installed to $ICON_DIR/claude-ai.png"
+    else
+        warn "No icon found. Notifications will use system default icon."
+        info "You can add a custom icon later at $ICON_DIR/claude-ai.png"
+    fi
+}
+
+# Configure Claude Code hooks
+configure_hooks() {
+    info "Configuring Claude Code hooks..."
+
+    local notify_cmd="$CONFIG_DIR/hooks/notify.sh --type input"
+    local stop_cmd="$CONFIG_DIR/hooks/notify.sh --type complete"
+
+    # Read current settings
+    local current_settings
+    current_settings=$(cat "$CLAUDE_SETTINGS")
+
+    # Check if hooks already exist
+    if echo "$current_settings" | jq -e '.hooks.Notification' &>/dev/null; then
+        warn "Notification hook already exists in Claude Code settings"
+        read -p "Overwrite existing Notification hook? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            info "Keeping existing Notification hook"
+            notify_cmd=""
+        fi
+    fi
+
+    if echo "$current_settings" | jq -e '.hooks.Stop' &>/dev/null; then
+        warn "Stop hook already exists in Claude Code settings"
+        read -p "Overwrite existing Stop hook? [y/N] " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            info "Keeping existing Stop hook"
+            stop_cmd=""
+        fi
+    fi
+
+    # Build the new hooks configuration
+    local new_settings="$current_settings"
+
+    if [[ -n "$notify_cmd" ]]; then
+        new_settings=$(echo "$new_settings" | jq --arg cmd "$notify_cmd" '
+            .hooks.Notification = [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": $cmd
+                        }
+                    ]
+                }
+            ]
+        ')
+    fi
+
+    if [[ -n "$stop_cmd" ]]; then
+        new_settings=$(echo "$new_settings" | jq --arg cmd "$stop_cmd" '
+            .hooks.Stop = [
+                {
+                    "matcher": "",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": $cmd
+                        }
+                    ]
+                }
+            ]
+        ')
+    fi
+
+    # Write updated settings
+    echo "$new_settings" | jq '.' > "$CLAUDE_SETTINGS"
+
+    success "Claude Code hooks configured"
+}
+
+# Test notification
+test_notification() {
+    read -p "Send a test notification? [Y/n] " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
+        return
+    fi
+
+    info "Sending test notification..."
+    if "$CONFIG_DIR/hooks/notify.sh" --test; then
+        success "Test notification sent!"
+    else
+        error "Test notification failed"
+    fi
+}
+
+# Print summary
+print_summary() {
+    echo ""
+    echo -e "${GREEN}============================================${NC}"
+    echo -e "${GREEN}  Claude Notify installed successfully!${NC}"
+    echo -e "${GREEN}============================================${NC}"
+    echo ""
+    echo "Installation locations:"
+    echo "  Config:  $CONFIG_DIR/config.json"
+    echo "  Hooks:   $CONFIG_DIR/hooks/"
+    echo ""
+    echo "Next steps:"
+    echo "  1. Edit $CONFIG_DIR/config.json to customize notifications"
+    echo "  2. For push notifications (ntfy, Pushover), add your credentials"
+    echo "  3. Start using Claude Code - you'll now receive notifications!"
+    echo ""
+    echo "To uninstall, run: $SCRIPT_DIR/uninstall.sh"
+    echo ""
+}
+
+# Main installation
+main() {
+    echo ""
+    echo -e "${BLUE}======================================${NC}"
+    echo -e "${BLUE}  Claude Notify Installer${NC}"
+    echo -e "${BLUE}======================================${NC}"
+    echo ""
+
+    check_dependencies
+    check_claude_code
+    backup_settings
+    create_directories
+    install_hooks
+    install_config
+    install_icon
+    configure_hooks
+    test_notification
+    print_summary
+}
+
+main "$@"
