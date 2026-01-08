@@ -48,6 +48,18 @@ declare -A PRESET_ICONS=(
     [error]="dialog-error"
 )
 
+declare -A PRESET_CATEGORIES=(
+    [input]="im.received"
+    [complete]="transfer.complete"
+    [error]="im.error"
+)
+
+declare -A PRESET_ACTIONS=(
+    [input]="view=View in Terminal"
+    [complete]="view=View in Terminal"
+    [error]="view=View Error"
+)
+
 # Parse command line arguments
 TYPE=""
 TITLE=""
@@ -55,6 +67,9 @@ MESSAGE=""
 BACKEND=""
 URGENCY=""
 ICON=""
+CATEGORY=""
+ACTION=""
+WAIT_FOR_ACTION=false
 TEST_MODE=false
 
 while [[ $# -gt 0 ]]; do
@@ -83,6 +98,18 @@ while [[ $# -gt 0 ]]; do
             ICON="$2"
             shift 2
             ;;
+        --category|-c)
+            CATEGORY="$2"
+            shift 2
+            ;;
+        --action|-a)
+            ACTION="$2"
+            shift 2
+            ;;
+        --wait|-w)
+            WAIT_FOR_ACTION=true
+            shift
+            ;;
         --test)
             TEST_MODE=true
             shift
@@ -97,6 +124,9 @@ while [[ $# -gt 0 ]]; do
             echo "  --backend, -b NAME   Backend: auto, notify-send, osascript, ntfy, pushover"
             echo "  --urgency, -u LEVEL  Urgency: low, normal, critical"
             echo "  --icon, -i PATH      Path to icon file"
+            echo "  --category, -c CAT   Notification category (e.g., im.received)"
+            echo "  --action, -a ACTION  Add action button (format: id=Label)"
+            echo "  --wait, -w           Wait for action response (Linux only)"
             echo "  --test               Send a test notification"
             echo "  --help, -h           Show this help message"
             exit 0
@@ -169,6 +199,9 @@ send_notify_send() {
     local message="$2"
     local urgency="${3:-normal}"
     local icon="$4"
+    local category="${5:-}"
+    local action="${6:-}"
+    local wait_for_action="${7:-false}"
 
     local args=()
     args+=("--urgency=$urgency")
@@ -182,11 +215,32 @@ send_notify_send() {
         fi
     fi
 
+    # Add notification category/hint
+    if [[ -n "$category" ]]; then
+        args+=("--category=$category")
+    fi
+
+    # Add action buttons
+    if [[ -n "$action" ]]; then
+        args+=("--action=$action")
+    fi
+
+    # Wait for action response
+    if [[ "$wait_for_action" == true ]]; then
+        args+=("--wait")
+    fi
+
     args+=("--app-name=Claude Code")
     args+=("$title")
     args+=("$message")
 
-    notify-send "${args[@]}"
+    local result
+    result=$(notify-send "${args[@]}")
+
+    # Return the clicked action (if any)
+    if [[ -n "$result" ]]; then
+        echo "$result"
+    fi
 }
 
 # Send notification via osascript (macOS)
@@ -339,6 +393,12 @@ main() {
         if [[ -z "$ICON" ]]; then
             ICON="${PRESET_ICONS[$TYPE]:-}"
         fi
+        if [[ -z "$CATEGORY" ]]; then
+            CATEGORY="${PRESET_CATEGORIES[$TYPE]:-}"
+        fi
+        if [[ -z "$ACTION" ]]; then
+            ACTION="${PRESET_ACTIONS[$TYPE]:-}"
+        fi
     fi
 
     # Require title and message
@@ -358,7 +418,7 @@ main() {
     # Send notification
     case "$BACKEND" in
         notify-send)
-            send_notify_send "$TITLE" "$MESSAGE" "$URGENCY" "$ICON"
+            send_notify_send "$TITLE" "$MESSAGE" "$URGENCY" "$ICON" "$CATEGORY" "$ACTION" "$WAIT_FOR_ACTION"
             ;;
         osascript)
             send_osascript "$TITLE" "$MESSAGE"
