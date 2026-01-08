@@ -447,6 +447,39 @@ This will:
    cat ~/.claude/settings.json | jq .
    ```
 
+## Security
+
+### Credential Management
+
+**Never commit credentials to version control.** Use these secure methods instead:
+
+1. **Environment Variables (Recommended):**
+   ```bash
+   export CLAUDE_NOTIFY_NTFY_TOKEN="tk_your_token"
+   export CLAUDE_NOTIFY_PUSHOVER_TOKEN="your_api_token"
+   ```
+
+2. **Config File Permissions:**
+   ```bash
+   # Ensure your config file is only readable by you
+   chmod 600 ~/.config/claude-notify/config.json
+   ```
+
+3. **For Self-Hosted Services:**
+   - Use access tokens instead of username/password where possible
+   - Rotate tokens regularly
+   - Use TLS for all connections to self-hosted servers
+
+### Security Features
+
+- **Input Sanitization:** All user inputs are sanitized to prevent command injection (AppleScript), XML injection (Windows Toast), and HTTP header injection (ntfy)
+- **Path Validation:** Project config files are only loaded from within the user's home directory
+- **Safe Uninstall:** Directory deletion is validated against expected paths to prevent accidental removal of system files
+
+### Reporting Vulnerabilities
+
+If you discover a security vulnerability, please report it responsibly by opening a private security advisory on GitHub rather than a public issue.
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

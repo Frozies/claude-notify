@@ -185,9 +185,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Find project-specific config file (walks up directory tree)
+# Security: Only searches within user's home directory to prevent loading
+# configs from system directories or other users' directories
 find_project_config() {
     local dir="$PWD"
-    while [[ "$dir" != "/" ]]; do
+    local home_dir="${HOME:-/}"
+
+    # Ensure we start within home directory for security
+    if [[ "$dir" != "$home_dir"* ]]; then
+        return 1
+    fi
+
+    while [[ "$dir" != "/" && "$dir" == "$home_dir"* ]]; do
         if [[ -f "$dir/$PROJECT_CONFIG_NAME" ]]; then
             echo "$dir/$PROJECT_CONFIG_NAME"
             return 0
@@ -419,6 +428,16 @@ send_notify_send() {
     fi
 }
 
+# Escape string for safe use in AppleScript
+# Prevents command injection via malicious input
+escape_applescript() {
+    local str="$1"
+    # Escape backslashes first, then double quotes
+    str="${str//\\/\\\\}"
+    str="${str//\"/\\\"}"
+    echo "$str"
+}
+
 # Send notification via osascript (macOS)
 send_osascript() {
     local title="$1"
@@ -426,11 +445,17 @@ send_osascript() {
     local subtitle="${3:-}"
     local sound="${4:-}"
 
-    local script="display notification \"$message\" with title \"$title\""
+    # Escape all user-provided strings to prevent command injection
+    local safe_title safe_message safe_subtitle safe_sound
+    safe_title=$(escape_applescript "$title")
+    safe_message=$(escape_applescript "$message")
+
+    local script="display notification \"$safe_message\" with title \"$safe_title\""
 
     # Add subtitle if provided
     if [[ -n "$subtitle" ]]; then
-        script="$script subtitle \"$subtitle\""
+        safe_subtitle=$(escape_applescript "$subtitle")
+        script="$script subtitle \"$safe_subtitle\""
     fi
 
     # Add sound if requested
@@ -439,7 +464,8 @@ send_osascript() {
         if [[ "$sound" == "true" || "$sound" == "default" ]]; then
             script="$script sound name \"default\""
         else
-            script="$script sound name \"$sound\""
+            safe_sound=$(escape_applescript "$sound")
+            script="$script sound name \"$safe_sound\""
         fi
     fi
 
@@ -502,10 +528,39 @@ send_terminal_notifier() {
     fi
 }
 
+# Escape string for safe use in XML
+# Prevents XML injection via malicious input
+escape_xml() {
+    local str="$1"
+    str="${str//&/&amp;}"
+    str="${str//</&lt;}"
+    str="${str//>/&gt;}"
+    str="${str//\"/&quot;}"
+    str="${str//\'/&apos;}"
+    echo "$str"
+}
+
+# Sanitize string for safe use in HTTP headers
+# Prevents HTTP header injection via newlines and control characters
+sanitize_http_header() {
+    local str="$1"
+    # Remove carriage returns, newlines, and other control characters
+    str="${str//$'\r'/}"
+    str="${str//$'\n'/ }"
+    # Remove null bytes
+    str="${str//$'\0'/}"
+    echo "$str"
+}
+
 # Send notification via PowerShell (Windows)
 send_powershell() {
     local title="$1"
     local message="$2"
+
+    # Escape for XML to prevent injection
+    local safe_title safe_message
+    safe_title=$(escape_xml "$title")
+    safe_message=$(escape_xml "$message")
 
     powershell.exe -Command "
         [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
@@ -515,8 +570,8 @@ send_powershell() {
         <toast>
             <visual>
                 <binding template=\"ToastText02\">
-                    <text id=\"1\">$title</text>
-                    <text id=\"2\">$message</text>
+                    <text id=\"1\">$safe_title</text>
+                    <text id=\"2\">$safe_message</text>
                 </binding>
             </visual>
         </toast>
@@ -594,25 +649,32 @@ send_ntfy() {
         fi
     fi
 
+    # Sanitize all header values to prevent HTTP header injection
+    local safe_title safe_tags safe_click safe_actions
+    safe_title=$(sanitize_http_header "$title")
+    safe_tags=$(sanitize_http_header "$final_tags")
+    safe_click=$(sanitize_http_header "$click_url")
+    safe_actions=$(sanitize_http_header "$actions")
+
     # Build curl arguments
     local curl_args=()
     curl_args+=(-s)
-    curl_args+=(-H "Title: $title")
+    curl_args+=(-H "Title: $safe_title")
     curl_args+=(-H "Priority: $ntfy_priority")
 
-    if [[ -n "$final_tags" ]]; then
-        curl_args+=(-H "Tags: $final_tags")
+    if [[ -n "$safe_tags" ]]; then
+        curl_args+=(-H "Tags: $safe_tags")
     fi
 
     # Add click action (opens URL when notification is clicked)
-    if [[ -n "$click_url" ]]; then
-        curl_args+=(-H "Click: $click_url")
+    if [[ -n "$safe_click" ]]; then
+        curl_args+=(-H "Click: $safe_click")
     fi
 
     # Add action buttons
     # Format: "action=view, Open Terminal, http://...; action=http, View Logs, http://..."
-    if [[ -n "$actions" ]]; then
-        curl_args+=(-H "Actions: $actions")
+    if [[ -n "$safe_actions" ]]; then
+        curl_args+=(-H "Actions: $safe_actions")
     fi
 
     # Add attachment if specified

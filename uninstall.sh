@@ -99,6 +99,23 @@ remove_config() {
         return
     fi
 
+    # Security: Validate that CONFIG_DIR is within expected paths
+    # to prevent accidental deletion of system directories
+    local resolved_path
+    resolved_path=$(cd "$CONFIG_DIR" 2>/dev/null && pwd -P)
+    local expected_parent="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+    if [[ -z "$resolved_path" ]]; then
+        error "Cannot resolve config directory path"
+        return 1
+    fi
+
+    if [[ "$resolved_path" != "$expected_parent/claude-notify" ]]; then
+        error "Config directory path mismatch. Expected: $expected_parent/claude-notify, Got: $resolved_path"
+        error "Refusing to delete for safety. Please remove manually if needed."
+        return 1
+    fi
+
     echo ""
     read -p "Remove configuration files at $CONFIG_DIR? [y/N] " -n 1 -r
     echo
