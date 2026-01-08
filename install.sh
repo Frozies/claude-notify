@@ -38,6 +38,54 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-notify"
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons"
+VERSION_FILE="${CONFIG_DIR}/.version"
+
+# Get current version from repo
+get_repo_version() {
+    if [[ -f "$SCRIPT_DIR/VERSION" ]]; then
+        cat "$SCRIPT_DIR/VERSION" | tr -d '[:space:]'
+    else
+        echo "0.0.0"
+    fi
+}
+
+# Get installed version
+get_installed_version() {
+    if [[ -f "$VERSION_FILE" ]]; then
+        cat "$VERSION_FILE" | tr -d '[:space:]'
+    else
+        echo ""
+    fi
+}
+
+# Compare semantic versions (returns: 0=equal, 1=first greater, 2=second greater)
+compare_versions() {
+    local v1="$1"
+    local v2="$2"
+
+    if [[ "$v1" == "$v2" ]]; then
+        echo 0
+        return
+    fi
+
+    local IFS='.'
+    local i
+    local v1_parts=($v1)
+    local v2_parts=($v2)
+
+    for ((i=0; i<3; i++)); do
+        local v1_part="${v1_parts[i]:-0}"
+        local v2_part="${v2_parts[i]:-0}"
+        if ((v1_part > v2_part)); then
+            echo 1
+            return
+        elif ((v1_part < v2_part)); then
+            echo 2
+            return
+        fi
+    done
+    echo 0
+}
 
 # Logging functions
 info() { echo -e "${BLUE}[INFO]${NC} $1"; }
@@ -54,6 +102,58 @@ run_cmd() {
     else
         "$@"
     fi
+}
+
+# Check for existing installation and handle upgrade
+check_upgrade() {
+    local repo_version=$(get_repo_version)
+    local installed_version=$(get_installed_version)
+
+    if [[ -z "$installed_version" ]]; then
+        info "Fresh installation of Claude Notify v${repo_version}"
+        return 0
+    fi
+
+    local comparison=$(compare_versions "$repo_version" "$installed_version")
+
+    case $comparison in
+        0)
+            info "Claude Notify v${installed_version} is already installed (same version)"
+            if [[ "$DRY_RUN" != true ]]; then
+                read -p "Reinstall? [y/N] " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    info "Installation cancelled"
+                    exit 0
+                fi
+            fi
+            ;;
+        1)
+            success "Upgrading Claude Notify: v${installed_version} -> v${repo_version}"
+            ;;
+        2)
+            warn "Installed version (v${installed_version}) is newer than repo (v${repo_version})"
+            if [[ "$DRY_RUN" != true ]]; then
+                read -p "Downgrade? [y/N] " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    info "Installation cancelled"
+                    exit 0
+                fi
+            fi
+            ;;
+    esac
+}
+
+# Save installed version
+save_version() {
+    local version=$(get_repo_version)
+    if [[ "$DRY_RUN" == true ]]; then
+        dry_run_msg "echo $version > $VERSION_FILE"
+    else
+        echo "$version" > "$VERSION_FILE"
+    fi
+    info "Version $version recorded"
 }
 
 # Check dependencies
@@ -309,9 +409,10 @@ test_notification() {
 
 # Print summary
 print_summary() {
+    local version=$(get_repo_version)
     echo ""
     echo -e "${GREEN}============================================${NC}"
-    echo -e "${GREEN}  Claude Notify installed successfully!${NC}"
+    echo -e "${GREEN}  Claude Notify v${version} installed successfully!${NC}"
     echo -e "${GREEN}============================================${NC}"
     echo ""
     echo "Installation locations:"
@@ -342,12 +443,14 @@ main() {
 
     check_dependencies
     check_claude_code
+    check_upgrade
     backup_settings
     create_directories
     install_hooks
     install_config
     install_icon
     configure_hooks
+    save_version
     test_notification
     print_summary
 }

@@ -17,6 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-notify"
 CONFIG_FILE="${CONFIG_DIR}/config.json"
 PROJECT_CONFIG_NAME=".claude-notify.json"
+VERSION_FILE="${CONFIG_DIR}/.version"
 
 # Defaults
 DEFAULT_BACKEND="auto"
@@ -125,6 +126,14 @@ while [[ $# -gt 0 ]]; do
             fi
             shift
             ;;
+        --version|-V)
+            if [[ -f "$VERSION_FILE" ]]; then
+                echo "Claude Notify v$(cat "$VERSION_FILE" | tr -d '[:space:]')"
+            else
+                echo "Claude Notify (version unknown - not installed via installer)"
+            fi
+            exit 0
+            ;;
         --help|-h)
             echo "Usage: notify.sh [OPTIONS]"
             echo ""
@@ -140,6 +149,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --wait, -w           Wait for action response (Linux only)"
             echo "  --test               Send a test notification"
             echo "  --validate [FILE]    Validate configuration file and exit"
+            echo "  --version, -V        Show version information"
             echo "  --help, -h           Show this help message"
             exit 0
             ;;
