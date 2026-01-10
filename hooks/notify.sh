@@ -12,6 +12,9 @@
 
 set -euo pipefail
 
+# Error trap: output useful message if script fails unexpectedly
+trap 'echo "Error: notify.sh failed at line $LINENO" >&2' ERR
+
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/claude-notify"
@@ -312,6 +315,10 @@ load_config() {
     local effective_config=""
     local project_config=""
 
+    # Initialize config variables to prevent unset variable errors
+    CONFIG_BACKEND=""
+    CONFIG_ICON=""
+
     # Check for project-specific config
     project_config=$(find_project_config 2>/dev/null || echo "")
 
@@ -405,13 +412,11 @@ send_notify_send() {
         args+=("--category=$category")
     fi
 
-    # Add action buttons
-    if [[ -n "$action" ]]; then
-        args+=("--action=$action")
-    fi
-
-    # Wait for action response
+    # Add action buttons (only if waiting, since --action blocks)
     if [[ "$wait_for_action" == true ]]; then
+        if [[ -n "$action" ]]; then
+            args+=("--action=$action")
+        fi
         args+=("--wait")
     fi
 
@@ -420,7 +425,10 @@ send_notify_send() {
     args+=("$message")
 
     local result
-    result=$(notify-send "${args[@]}")
+    if ! result=$(notify-send "${args[@]}" 2>&1); then
+        echo "notify-send failed: ${result:-unknown error}" >&2
+        return 1
+    fi
 
     # Return the clicked action (if any)
     if [[ -n "$result" ]]; then
@@ -521,7 +529,10 @@ send_terminal_notifier() {
 
     # Execute and capture result (clicked action)
     local result
-    result=$(terminal-notifier "${args[@]}")
+    if ! result=$(terminal-notifier "${args[@]}" 2>&1); then
+        echo "terminal-notifier failed: ${result:-unknown error}" >&2
+        return 1
+    fi
 
     if [[ -n "$result" ]]; then
         echo "$result"
